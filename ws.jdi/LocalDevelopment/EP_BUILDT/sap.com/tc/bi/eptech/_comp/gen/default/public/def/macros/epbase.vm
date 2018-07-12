@@ -1,0 +1,133 @@
+#**
+ * Default invocation of the EPA generator.
+ *
+ * source       list of source folder that containe *.ept files.
+ * output       output folder where the EPA file will be generated
+ * name         name of the EPA file that will be generated
+ * propsFile    a file containing additional properties for the generator
+ *#
+#macro(DefaultEPAGeneration $source $output $name $propsfile)
+    #set ($gc = $dc_util.createGeneratorCall("sap.com~epa"))
+    $gc.setInputPath("default",         $dc_util.createSingleItemList($source))
+    $gc.setOutputPath("default",        "${output}")
+    $gc.setParameter("filename",        $name)
+    $gc.setParameter("propertiesFile",  $propsfile)
+    $gc.invoke()
+#end
+
+#**
+ * Default invocation of the EPA generator.
+ *
+ * source       list of source folder that containe *.ept files.
+ * output       output folder where the EPA file will be generated
+ * name         name of the EPA file that will be generated
+ * propsFile    a file containing additional properties for the generator
+ *#
+#macro(EPAGeneration $source $output $name $properties)
+    #set ($gc = $dc_util.createGeneratorCall("sap.com~epa"))
+    $gc.setInputPath("default",         $dc_util.createSingleItemList($source))
+    $gc.setOutputPath("default",        "${output}")
+    $gc.setParameter("filename",        $name)
+    $gc.setParameter("properties",      $properties)
+    $gc.invoke()
+#end
+
+#**
+ * Generator implementation.
+ *#
+#macro(EpaGenerator $input $output $used $params)
+    #set($epagen_sources     = $input.get("default"))
+    #set($epagen_destdir     = $output.get("default"))
+
+    #set($epagen_filename    = $params.get("filename"))
+    #set($epagen_propsFile   = $params.get("propertiesFile"))
+    #set($epagen_addprops    = $params.get("properties"))
+
+    #StartTimer()
+    $antBase.taskdef("epa")
+    <epa epaFile="${epagen_destdir}/${epagen_filename}"
+         propertiesFile="${epagen_propsFile}">
+        #if ($epagen_addprops)
+            #foreach($key in $epagen_addprops.keySet())
+            #set($value = $epagen_addprops.get($key))
+            <property name="${key}" value="${value}"/>
+            #end
+        #end
+        <property name="DC-Vendor" value="${dc_vendor}"/>
+        <property name="DC-Name" value="${dc_name}"/>
+        <property name="DC-Location" value="${dc_jarSAP_location}"/>
+        <property name="DC-Counter" value="${dc_jarSAP_counter}"/>
+        #foreach($dir in $epagen_sources)
+            <fileset dir="${dir}" includes="*.ept" />
+        #end
+    </epa>
+    #ShowTimer("EPA generator")
+#end
+
+#**
+ * Create a KM configarchive. This macro can only handle a single configmeta
+ * archive per configarchive.
+ *
+ * @param name          the name of the archive. The actual filename generated will
+ *                      escape special character.
+ * @param rootfolder    the root folder where the extracted configarchive data
+ *                      can be found. Usually this is a "src.config" folder that
+ *                      contains a single "install" folder.
+ * @param destFolder    the destination folder where the configarchive file will
+ *                      be created.
+ *#
+#macro(CreateConfigArchive $name $rootfolder $destFolder)
+    ## - zip content of src.config folder as *.configarchive
+    #set ($config_gen_dir = "${dc_gen_tempDir}/configarchive")
+    #set ($dummy = $dc_util.createDirectory($config_gen_dir))
+    $portaltech_tools.prepareConfigArchiveManifests("${name}", "${rootfolder}", "${config_gen_dir}")
+    #MkDir("${destFolder}")
+
+    ## check for metaarchive and create it
+    #set ($escapedParName = $portaltech_tools.escapeConfigName("$name"))
+    #if ($dc_util.isDirectory("${rootfolder}/install/meta/expanded"))
+        #BeginZip("${config_gen_dir}/${escapedParName}.configmeta")
+            <zipfileset dir="${config_gen_dir}" includes="CMA-MANIFEST.MF" fullpath="META-INF/MANIFEST.MF"/>
+            <fileset dir="${rootfolder}/install/meta/expanded"/>
+        #EndZip()
+    #end
+
+    #BeginZip("${destFolder}/${escapedParName}.configarchive")
+        <zipfileset dir="${config_gen_dir}" includes="CA-MANIFEST.MF" fullpath="META-INF/MANIFEST.MF"/>
+        <fileset dir="${rootfolder}">
+            <include name="install/data/**"/>
+        </fileset>
+        <zipfileset dir="${config_gen_dir}" prefix="install/meta/lib">
+            <include name="*.configmeta"/>
+        </zipfileset>
+    #EndZip()
+#end
+
+
+#macro(CreateUWLArchive $uwl_srcdir $destFolder)
+    <echo message="Creating UWL archive"/>
+    ## find xml file, there must be only one.
+    #set($xmlFiles = $dc_util.findFiles("${dc_rootDir}/${uwl_srcdir}", "*.xml"))
+    #if ($xmlFiles.size() != 1)
+        #set($dummy = $dc_util.exit("${uwl_srcdir} must contain exactly one *.xml file"))
+    #end
+    #set($xmlFile = $xmlFiles.get(0))
+    #set($uwl = $dc_util.getBasename($xmlFile))
+    ## convert xliff files to property files
+    #set($xlf2prop = $dc_build_options.shouldConvertXlfToProperties())
+    #if($xlf2prop)
+        #set($uwl_tempdir = $dc_util.createTempDir("uwlxlf"))
+        #Xlf2PropDir( "${dc_rootDir}/${uwl_srcdir}" "${uwl_tempdir}")
+    #end
+    ## package uwl archive
+    #BeginZip("${destFolder}/uwl_${uwl}.zip")
+        #if($xlf2prop)
+        <fileset dir="${uwl_tempdir}"/>
+        #end
+        <fileset dir="${dc_rootDir}/${uwl_srcdir}">
+            #if($xlf2prop)
+                <exclude name="**/*.xlf"/>
+            #end
+        </fileset>
+    #EndZip()
+#end

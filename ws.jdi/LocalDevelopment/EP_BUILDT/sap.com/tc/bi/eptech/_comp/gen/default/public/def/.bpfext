@@ -1,0 +1,57 @@
+<technologies version="1">
+  <technology name="sap.com/tc/bi/eptech">
+    <uses>sap.com/tc/bi/javatech</uses>
+    <entity>
+      <descriptor type="Portal API">
+        <any-subtype/>
+        <public-part-purpose>compilation</public-part-purpose>
+        <handler classname="com.sap.tc.buildplugin.pp.entity.EHPortalAPI"/>
+      </descriptor>
+      <descriptor type="PAR">
+        <any-subtype/>
+        <public-part-purpose>assembly</public-part-purpose>
+      </descriptor>
+    </entity>
+    <development-component>
+      <descriptor vendor="sap.com" type="Enterprise Portal" subtype="Portal Application Module">
+        <public-parts default="permit"/>
+      </descriptor>
+      <descriptor vendor="sap.com" type="Enterprise Portal" subtype="Portal Content">
+        <attributes text-recipient="PCD"/>
+        <public-parts default="permit"/>
+      </descriptor>
+    </development-component>
+    <datacontextprovider>
+      <!-- class must implement com.sap.tc.buildplugin.api.IBuildFileCreatorPlugin -->
+      <provider classname="com.sap.tc.buildplugin.PortalMacroContextProvider"/>
+    </datacontextprovider>
+      <generators>
+        <generator type="sap.com~epa"
+          implementation-type="macro"
+          implementation-name="EpaGenerator">
+          <input-types></input-types>
+          <output-types></output-types>
+          <inputs>
+            <input name="default" required="true">
+              <description>Source path containing *.ept files</description>
+            </input>
+          </inputs>
+          <outputs>
+            <output name="default" required="true" default-value="$dc_gen_tempDir"/>
+          </outputs>
+          <parameters>
+            <parameter name="filename" required="true" default-value="${dc_deployFile}.epa"/>
+            <parameter name="propertiesFile" required="false" default-value="${dc_rootDir}/PACKAGE-INF/package.properties"/>
+            <parameter name="properties" required="false"/>
+          </parameters>
+        </generator>
+      </generators>
+    <build-options>
+      <option name="com.sap.portal.pcd.anonymize-content" value="true,false"/>
+    </build-options>
+    <ant-tasks>
+      <task name="eptconvert" classname="com.sap.tc.buildplugin.anttasks.EPTConverter" on-demand="true"/>
+      <task name="epa" classname="com.sap.portal.pcd.transport.tools.ant.taskdefs.EpaTask" on-demand="true"/>
+    </ant-tasks>
+  </technology>
+</technologies>

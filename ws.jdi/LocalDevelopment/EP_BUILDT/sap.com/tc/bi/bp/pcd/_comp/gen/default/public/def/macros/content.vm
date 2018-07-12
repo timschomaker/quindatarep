@@ -1,0 +1,86 @@
+#macro (BuildContent)
+
+    ## temporary switch
+    $dc_util.defineSwitch("useContentSDA", "com.sap.pcd.use-content-sda-for-epa", false)
+
+    #if ($useContentSDA)
+        $dc_util.logInfo("Build will create Content SDA")
+    #else
+        $dc_util.logInfo("Build will create EAR with PCD module")
+    #end
+
+    #set($epa_files =  $dc_util.findFiles($dc_sourceDirsAsFiles, "*.epa"))
+    #if ($epa_files.size() > 0)
+        $dc_util.fail("This build plugin does not support checked in epa files.")
+    #end
+
+    $antBase.taskdef("xlf2prop")
+    $antBase.taskdef("eptconvert")
+    $antBase.taskdef("epa")
+
+    #set($epaTempDir = $dc_util.createTempDir("epa"))
+    #set($eptTempDir = $dc_util.createTempDir("ept"))
+
+    #if ($useContentSDA)
+        #set($epaTempDir2 = $dc_util.createTempDir("epa"))
+        #set($eptDestDir = "${epaTempDir2}/EPT")
+    #else
+        #set($eptDestDir = $epaTempDir)
+    #end
+
+    #StartTarget("repack")
+        #StartTimer()
+        #MkDir($eptDestDir)
+        <eptconvert tempdir="${eptTempDir}"
+                    destdir="${eptDestDir}"
+                    pattern="_pcd/*/*.ept">
+            #foreach($srcDir int $dc_sourceDirsAsFiles)
+                <root path="$srcDir"/>
+            #end
+        </eptconvert>
+        #ShowTimer("EPT repackaging")
+    #EndTarget()
+
+    #StartTargetDep("epa" "repack")
+        #StartTimer()
+        #if ($useContentSDA)
+        <epa dest="${epaTempDir}" copyEptFiles="false"
+             propertiesFile="${dc_rootDir}/PACKAGE-INF/package.properties">
+            <fileset dir="${eptDestDir}" includes="*.ept" />
+        #else
+        <epa epaFile="${dc_gen_tempDir}/${dc_deployFile}.epa"
+             propertiesFile="${dc_rootDir}/PACKAGE-INF/package.properties">
+            <fileset dir="${eptDestDir}" includes="*.ept" />
+        #end
+            <property name="DC-Vendor" value="${dc_vendor}"/>
+            <property name="DC-Name" value="${dc_name}"/>
+            <property name="DC-Location" value="${dc_jarSAP_location}"/>
+            <property name="DC-Counter" value="${dc_jarSAP_counter}"/>
+        </epa>
+        #ShowTimer("EPA generator")
+    #EndTarget()
+
+
+    #if ($useContentSDA)
+    #StartTargetDep("createDeployArchive" "epa")
+        #BeginCreateSDADescriptor("${dc_gen_tempDir}/sda-dd.xml" "CONTENT" "")
+        #EndCreateSDADescriptor()
+
+        #BeginCreateDeployFile("sap.com~SDA" "${dc_deployDir}/${dc_deployFile}.sda" "${dc_gen_tempDir}/sda-dd.xml" $dc_depend_assemblyPPs)
+            <option key="software-subtype" value="pcd"/>
+            <fileset dir="${epaTempDir}"/>
+            <fileset dir="${epaTempDir2}"/>
+        #EndCreateDeployFile()
+    #EndTarget()
+
+    #else
+
+    #StartTargetDep("createDeployArchive" "epa")
+        #CreateDefaultJ2EEEngineDescriptor("${dc_gen_tempDir}/sda-dd.xml")
+        #BeginCreateDeployFile("sap.com~j2ee.EAR_SDA" "${dc_deployDir}/${dc_deployFile}.sda" "${dc_gen_tempDir}/sda-dd.xml" $dc_depend_assemblyPPs)
+            <module file="${dc_gen_tempDir}/${dc_deployFile}.epa" attributes="SAP-J2EE-Module[container-type[PortalRuntimeContainer]]"/>
+        #EndCreateDeployFile()
+    #EndTarget()
+    #end
+
+#end
