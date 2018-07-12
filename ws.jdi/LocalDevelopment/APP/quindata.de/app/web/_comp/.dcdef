@@ -13,6 +13,9 @@
 		<sub-type>WebModule</sub-type>
 	</component-type>
 	<properties>
+		<facet-attributes>
+			<facet facet-id="wst.jsdt.web" version="1.0"/>
+		</facet-attributes>
 		<folder-attributes xmlns="http://xml.sap.com/2002/11/DevelopmentComponent">
 			<folder-attribute attribute="web-inf" path="WebContent/WEB-INF"/>
 		</folder-attributes>
